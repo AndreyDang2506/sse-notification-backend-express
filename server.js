@@ -46,8 +46,10 @@ function subsribe(request, response, next) {
 function sendEventToUser(username, from, message) {
     console.info(`pushing ${message} notification for user ${username}`);
     const client = clients.filter(client => client.id === username);
-    console.log(`client ${client[0].id} sending...`)
-    client[0].response.write(`data: ${JSON.stringify({ from, message })}\n\n`)
+    if (client.length) {
+        console.log(`client ${client[0].id} sending...`)
+        client[0].response.write(`data: ${JSON.stringify({ from, message })}\n\n`)
+    }
 }
 
 async function send(request, respsonse, next) {
