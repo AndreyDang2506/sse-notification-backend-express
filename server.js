@@ -20,7 +20,10 @@ subscriber.subscribe('notification', (content) => {
 })
 
 
-function subsribe(request, response, next) {
+async function subsribe(request, response, next) {
+    const id = request.query.id;
+    console.log(`user ${id} connected`);
+
     const headers = {
         'Content-Type': 'text/event-stream',
         'Connection': 'keep-alive',
@@ -28,12 +31,20 @@ function subsribe(request, response, next) {
     };
     response.writeHead(200, headers);
 
-    const id = request.query.id;
 
     const newClient = {
         id,
         response
     };
+
+    const offlineNotifications = await publisher.lRange(`offline_notifications:${id}`, 0, -1);
+    setTimeout(() => {
+        offlineNotifications.forEach((notification) => {
+            const { username, from, message } = JSON.parse(notification);
+            sendEventToUser(username, from, message);
+        });
+        publisher.del(`offline_notifications:${id}`);
+    }, 1000)
 
     clients.push(newClient);
 
@@ -55,7 +66,15 @@ function sendEventToUser(username, from, message) {
 async function send(request, respsonse, next) {
     const { from, message } = request.body;
     const { username } = request.params;
-    await publisher.publish('notification', JSON.stringify({ username, from, message }));
+    const client = clients.filter(client => client.id === username);
+    const msg = JSON.stringify({ username, from, message });
+    // Check user's status and send notification if they are online
+    if (client.length) {
+        await publisher.publish('notification', msg);
+    } else {
+        // Store notifications in Redis to send back to users when they come back online
+        await publisher.lPush(`offline_notifications:${username}`, msg)
+    }
     respsonse.json('message pushed to user ' + username)
 }
 
